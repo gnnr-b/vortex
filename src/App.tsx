@@ -1,6 +1,6 @@
 import React from 'react'
 import './App.css'
-import ProceduralTunnel from './procedural_tunnel'
+import ProceduralTunnel from './components/ProceduralTunnel'
 
 function App() {
   return <ProceduralTunnel />

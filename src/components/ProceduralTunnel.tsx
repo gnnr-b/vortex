@@ -1,153 +1,11 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import React, { useRef, useState, useEffect } from 'react';
+import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import GUI from 'lil-gui';
-
-type Settings = {
-  color1: string;
-  color2: string;
-  bgColor: string;
-  outerRingCount: number;
-  outerSpacing: number;
-  ringRotationSpeed: number;
-  cameraSpeed: number;
-  ringShininess: number;
-  innerShapesPerRing: number;
-  innerZSegments: number;
-  innerRadius: number;
-  innerZSpacing: number;
-  innerSpiralRotation: number;
-  innerAngularSpeedScale: number;
-  fogNear: number;
-  fogFar: number;
-  shapeType: string;
-};
-
-function OuterRings({ settings }: { settings: Settings }) {
-  const ringCount = settings.outerRingCount;
-  const spacing = settings.outerSpacing;
-  const ringsRef = useRef<(THREE.Mesh | null)[]>([]);
-
-  useFrame((state) => {
-    state.camera.position.z -= settings.cameraSpeed;
-    const cameraZ = state.camera.position.z;
-
-    for (let i = 0; i < ringCount; i++) {
-      const mesh = ringsRef.current[i] as unknown as THREE.Mesh | undefined;
-      if (!mesh) continue;
-      mesh.rotation.z += settings.ringRotationSpeed;
-
-      if (mesh.position.z > cameraZ + spacing) {
-        mesh.position.z -= ringCount * spacing;
-      }
-
-      const totalLen = ringCount * spacing;
-      const progress = ((mesh.position.z - cameraZ + totalLen) % totalLen) / totalLen;
-      const c1 = new THREE.Color(settings.color1);
-      const c2 = new THREE.Color(settings.color2);
-      (mesh.material as THREE.MeshPhongMaterial).color.lerpColors(c1, c2, progress);
-    }
-  });
-
-  return (
-    <group>
-      {new Array(ringCount).fill(0).map((_, i) => (
-        <mesh
-          key={`ring-${i}`}
-          ref={(el) => (ringsRef.current[i] = el)}
-          position={[0, 0, -i * spacing]}
-        >
-          <torusGeometry args={[8, 0.3, 16, 32]} />
-          <meshPhongMaterial color={settings.color1} shininess={settings.ringShininess} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function InnerShapes({ settings }: { settings: Settings }) {
-  const zSegments = settings.innerZSegments;
-  const shapesPerRing = settings.innerShapesPerRing;
-  const radius = settings.innerRadius;
-  const zSpacing = settings.innerZSpacing;
-  const spiralRotation = settings.innerSpiralRotation;
-
-  const shapes = useMemo(() => {
-    const result: Array<any> = [];
-    for (let z = 0; z < zSegments; z++) {
-      for (let i = 0; i < shapesPerRing; i++) {
-        const baseAngle = (i / shapesPerRing) * Math.PI * 2;
-        const spiralOffset = z * spiralRotation;
-        const phase = Math.random() * Math.PI * 2;
-        const speedBase = 0.6 + (z / zSegments) * 0.8;
-        const angularSpeed = speedBase * (0.8 + Math.random() * 0.8) * settings.innerAngularSpeedScale;
-        const angle = baseAngle + spiralOffset + phase;
-        result.push({
-          baseAngle,
-          spiralOffset,
-          phase,
-          angularSpeed,
-          radius,
-          zIndex: z,
-          angle,
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius,
-          z: -z * zSpacing,
-        });
-      }
-    }
-    return result;
-  }, [settings.shapeType, zSegments, shapesPerRing, radius, zSpacing, spiralRotation, settings.innerAngularSpeedScale]);
-
-  const meshRefs = useRef<Array<THREE.Mesh | null>>([]);
-
-  const { camera } = useThree();
-
-  useFrame(() => {
-    const t = performance.now() * 0.001;
-    const cameraZ = (camera.position.z as number) || 0;
-
-    for (let i = 0; i < shapes.length; i++) {
-      const m = meshRefs.current[i];
-      if (!m) continue;
-      const ud = shapes[i];
-      const angle = ud.baseAngle + ud.spiralOffset + ud.phase + t * ud.angularSpeed;
-      m.position.x = Math.cos(angle) * ud.radius;
-      m.position.y = Math.sin(angle) * ud.radius;
-
-      m.rotation.x += 0.01 + (i % 3) * 0.002;
-      m.rotation.y += 0.01 + (i % 4) * 0.002;
-
-      if (m.position.z > cameraZ + 5) {
-        m.position.z -= zSegments * zSpacing;
-        ud.phase = Math.random() * Math.PI * 2;
-        ud.angularSpeed = 0.6 + Math.random() * 1.0;
-      }
-    }
-  });
-
-  return (
-    <group>
-      {shapes.map((s, i) => (
-        <mesh
-          key={`shape-${i}`}
-          ref={(el) => (meshRefs.current[i] = el)}
-          position={[s.x, s.y, s.z]}
-          rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
-        >
-          {settings.shapeType === 'sphere' ? (
-            <sphereGeometry args={[0.5, 16, 16]} />
-          ) : settings.shapeType === 'tetrahedron' ? (
-            <tetrahedronGeometry args={[0.6]} />
-          ) : (
-            <boxGeometry args={[0.8, 0.8, 0.8]} />
-          )}
-          <meshPhongMaterial color={new THREE.Color(Math.random() * 0xffffff)} shininess={50} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
+import type { Settings } from './types';
+import OuterRings from './OuterRings';
+import InnerShapes from './InnerShapes';
+import CanvasCapturer from './CanvasCapturer';
 
 export default function ProceduralTunnel() {
   const [settings, setSettings] = useState<Settings>({
@@ -212,72 +70,6 @@ export default function ProceduralTunnel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function CanvasCapturer({ isRecording }: { isRecording: boolean }) {
-    const { gl } = useThree();
-    useFrame(() => {
-      if (isRecording && gifRef.current && gl && gl.domElement) {
-        try {
-          const source = gl.domElement as HTMLCanvasElement;
-          const rc = readCanvasRef.current;
-          const rctx = readCtxRef.current;
-          if (rc && rctx) {
-            if (rc.width !== source.width || rc.height !== source.height) {
-              rc.width = source.width;
-              rc.height = source.height;
-            }
-            rctx.drawImage(source, 0, 0);
-            try {
-              const data = rc.toDataURL('image/png');
-              const img = new Image();
-              img.onload = () => {
-                try {
-                  gifRef.current.addFrame(img, { copy: true, delay: Math.round(1000 / 30) });
-                  framesCapturedRef.current += 1;
-                } catch (e) {
-                  // ignore
-                }
-              };
-              img.src = data;
-            } catch (e) {
-              // fallback direct canvas
-              try {
-                gifRef.current.addFrame(rc, { copy: true, delay: Math.round(1000 / 30) });
-                framesCapturedRef.current += 1;
-              } catch (ee) {
-                // ignore
-              }
-            }
-          } else {
-            // fallback: use toDataURL from source canvas
-            try {
-              const data = source.toDataURL('image/png');
-              const img = new Image();
-              img.onload = () => {
-                try {
-                  gifRef.current.addFrame(img, { copy: true, delay: Math.round(1000 / 30) });
-                  framesCapturedRef.current += 1;
-                } catch (e) {
-                  // ignore
-                }
-              };
-              img.src = data;
-            } catch (e) {
-              try {
-                gifRef.current.addFrame(source, { copy: true, delay: Math.round(1000 / 30) });
-                framesCapturedRef.current += 1;
-              } catch (ee) {
-                // ignore
-              }
-            }
-          }
-        } catch (e) {
-          // swallow capture errors
-        }
-      }
-    });
-    return null;
-  }
-
   const startRecording = async () => {
     if (isRecording) return;
     try {
@@ -292,7 +84,6 @@ export default function ProceduralTunnel() {
         document.head.appendChild(s);
       });
 
-      // fetch worker script and create a same-origin blob URL to avoid cross-origin Worker errors
       const workerResp = await fetch('https://unpkg.com/gif.js@0.2.0/dist/gif.worker.js');
       const workerText = await workerResp.text();
       const blob = new Blob([workerText], { type: 'application/javascript' });
@@ -300,7 +91,6 @@ export default function ProceduralTunnel() {
 
       const GIFLib = (window as any).GIF || (window as any).gif;
       if (!GIFLib) {
-        // eslint-disable-next-line no-console
         console.error('gif.js lib not available on window after loading script');
         return;
       }
@@ -321,15 +111,11 @@ export default function ProceduralTunnel() {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-        // revoke worker blob
         URL.revokeObjectURL(workerUrl);
       });
 
-      // debug
-      // eslint-disable-next-line no-console
       console.log('GIF recorder started', { workerUrl, width: gifOpts.width, height: gifOpts.height });
 
-      // prepare read canvas (same-origin, with willReadFrequently)
       if (canvasEl) {
         try {
           const rc = document.createElement('canvas');
@@ -346,7 +132,6 @@ export default function ProceduralTunnel() {
 
       setIsRecording(true);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Failed to start GIF recorder', err);
     }
   };
@@ -355,20 +140,16 @@ export default function ProceduralTunnel() {
     if (!isRecording || !gifRef.current) return;
     try {
       const gif = gifRef.current;
-      // if no frames captured yet, attempt one final add
       if (framesCapturedRef.current === 0 && canvasEl) {
         try {
           gif.addFrame(canvasEl, { copy: true, delay: Math.round(1000 / 30) });
           framesCapturedRef.current += 1;
-          // eslint-disable-next-line no-console
           if (framesCapturedRef.current % 10 === 0) console.log('Captured frames', framesCapturedRef.current);
         } catch (e) {
-          // ignore
         }
       }
       gif.render();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Failed to stop GIF recorder', err);
     } finally {
       gifRef.current = null;
@@ -392,7 +173,7 @@ export default function ProceduralTunnel() {
 
         <OuterRings settings={settings} />
         <InnerShapes settings={settings} />
-        <CanvasCapturer isRecording={isRecording} />
+        <CanvasCapturer isRecording={isRecording} gifRef={gifRef} readCanvasRef={readCanvasRef} readCtxRef={readCtxRef} framesCapturedRef={framesCapturedRef} />
       </Canvas>
 
       <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, display: 'flex', gap: 8 }}>
