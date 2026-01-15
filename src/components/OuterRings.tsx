@@ -52,6 +52,8 @@ export default function OuterRings({ settings }: { settings: Settings }) {
               if (el) (el.userData as any).baseColor = baseColor;
             }}
             position={[0, 0, -i * spacing]}
+            castShadow
+            receiveShadow
           >
             <torusGeometry args={[8, tube, 32, 64]} />
             <meshPhongMaterial color={colorNum} shininess={settings.ringShininess} wireframe />

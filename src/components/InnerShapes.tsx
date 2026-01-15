@@ -68,11 +68,13 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
     <group>
       {shapes.map((s, i) => (
         <mesh
-          key={`shape-${i}`}
-          ref={(el) => (meshRefs.current[i] = el)}
-          position={[s.x, s.y, s.z]}
-          rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
-        >
+            key={`shape-${i}`}
+            ref={(el) => (meshRefs.current[i] = el)}
+            position={[s.x, s.y, s.z]}
+            rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
+            castShadow
+            receiveShadow
+          >
           {settings.shapeType === 'sphere' ? (
             <sphereGeometry args={[0.5, 16, 16]} />
           ) : settings.shapeType === 'tetrahedron' ? (

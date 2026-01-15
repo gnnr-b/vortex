@@ -164,6 +164,7 @@ export default function ProceduralTunnel() {
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: '#000', display: 'flex', flexDirection: 'column', zIndex: 0 }}>
       <Canvas
+        shadows
         camera={{ position: [0, 0, 5], fov: 75 }}
         style={{ position: 'absolute', inset: 0, zIndex: 0 }}
         gl={{ antialias: true, preserveDrawingBuffer: true, alpha: false }}
@@ -171,8 +172,17 @@ export default function ProceduralTunnel() {
       >
         <color attach="background" args={[new THREE.Color(settings.bgColor).getHex()]} />
         <fog attach="fog" args={[new THREE.Color(settings.bgColor).getHex(), settings.fogNear, settings.fogFar]} />
-        <ambientLight intensity={0.5} />
-        <pointLight position={[0, 0, 10]} intensity={1} />
+        <ambientLight intensity={0.25} />
+        <directionalLight
+          castShadow
+          position={[5, 10, 5]}
+          intensity={1.2}
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+          shadow-camera-near={0.5}
+          shadow-camera-far={50}
+        />
+        <pointLight position={[0, 0, 10]} intensity={0.6} castShadow />
 
         <OuterRings settings={settings} />
         <InnerShapes settings={settings} />
