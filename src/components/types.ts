@@ -13,6 +13,7 @@ export type Settings = {
   innerZSpacing: number;
   innerSpiralRotation: number;
   innerAngularSpeedScale: number;
+  innerWireframe: boolean;
   fogNear: number;
   fogFar: number;
   shapeType: string;

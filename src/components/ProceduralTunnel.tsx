@@ -9,9 +9,10 @@ import CanvasCapturer from './CanvasCapturer';
 
 export default function ProceduralTunnel() {
   const [settings, setSettings] = useState<Settings>({
-    color1: '#ff0066',
-    color2: '#00ffff',
-    bgColor: '#000000',
+    // Neon palette centered on fuchsia/pink
+    color1: '#ff00ff',
+    color2: '#00ffe1',
+    bgColor: '#0b0014',
     outerRingCount: 50,
     outerSpacing: 2,
     ringRotationSpeed: 0.01,
@@ -23,6 +24,7 @@ export default function ProceduralTunnel() {
     innerZSpacing: 1.5,
     innerSpiralRotation: 0.3,
     innerAngularSpeedScale: 1.0,
+    innerWireframe: false,
     fogNear: 1,
     fogFar: 50,
     shapeType: 'cube',
@@ -50,6 +52,7 @@ export default function ProceduralTunnel() {
 
     const inner = gui.addFolder('Inner Shapes');
     inner.add(settings, 'shapeType', ['cube', 'sphere', 'tetrahedron']).name('Shape').onChange((v: string) => setSettings(s => ({ ...s, shapeType: v })));
+    inner.add(settings, 'innerWireframe').name('Wireframe').onChange((v: boolean) => setSettings(s => ({ ...s, innerWireframe: v })));
     inner.add(settings, 'innerShapesPerRing', 4, 24, 1).name('Per Ring').onChange((v: number) => setSettings(s => ({ ...s, innerShapesPerRing: v })));
     inner.add(settings, 'innerZSegments', 10, 200, 1).name('Z Segments').onChange((v: number) => setSettings(s => ({ ...s, innerZSegments: v })));
     inner.add(settings, 'innerRadius', 1, 10, 0.1).name('Radius').onChange((v: number) => setSettings(s => ({ ...s, innerRadius: v })));

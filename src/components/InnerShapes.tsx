@@ -80,7 +80,7 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
           ) : (
             <boxGeometry args={[0.8, 0.8, 0.8]} />
           )}
-          <meshPhongMaterial color={new THREE.Color(Math.random() * 0xffffff)} shininess={50} />
+          <meshPhongMaterial color={new THREE.Color(Math.random() * 0xffffff)} shininess={50} wireframe={settings.innerWireframe} />
         </mesh>
       ))}
     </group>

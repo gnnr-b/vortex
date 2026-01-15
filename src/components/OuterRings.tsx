@@ -21,26 +21,43 @@ export default function OuterRings({ settings }: { settings: Settings }) {
         mesh.position.z -= ringCount * spacing;
       }
 
-      const totalLen = ringCount * spacing;
-      const progress = ((mesh.position.z - cameraZ + totalLen) % totalLen) / totalLen;
-      const c1 = new THREE.Color(settings.color1);
-      const c2 = new THREE.Color(settings.color2);
-      (mesh.material as THREE.MeshPhongMaterial).color.lerpColors(c1, c2, progress);
+      // keep the material color equal to the precomputed base color
+      const base = (mesh.userData as any)?.baseColor as THREE.Color | undefined;
+      if (base) {
+        (mesh.material as THREE.MeshPhongMaterial).color.copy(base);
+      }
     }
   });
 
   return (
     <group>
-      {new Array(ringCount).fill(0).map((_, i) => (
-        <mesh
-          key={`ring-${i}`}
-          ref={(el) => (ringsRef.current[i] = el)}
-          position={[0, 0, -i * spacing]}
-        >
-          <torusGeometry args={[8, 0.3, 16, 32]} />
-          <meshPhongMaterial color={settings.color1} shininess={settings.ringShininess} />
-        </mesh>
-      ))}
+      {new Array(ringCount).fill(0).map((_, i) => {
+        const tube = Math.max(0.3, spacing * 0.5 + 0.02);
+        const t = ringCount > 1 ? i / (ringCount - 1) : 0;
+        const baseColor = new THREE.Color(settings.color1).lerp(new THREE.Color(settings.color2), t);
+        const hsl = { h: 0, s: 0, l: 0 } as { h: number; s: number; l: number };
+        baseColor.getHSL(hsl);
+        // shift hue slightly per-ring and boost saturation for neon feel
+        hsl.h = (hsl.h + i * 0.02) % 1;
+        hsl.s = Math.min(1, hsl.s * 1.25 + 0.08);
+        hsl.l = Math.min(1, Math.max(0.18, hsl.l * 1.05 + 0.02));
+        baseColor.setHSL(hsl.h, hsl.s, hsl.l);
+        const colorNum = baseColor.getHex();
+
+        return (
+          <mesh
+            key={`ring-${i}`}
+            ref={(el) => {
+              ringsRef.current[i] = el;
+              if (el) (el.userData as any).baseColor = baseColor;
+            }}
+            position={[0, 0, -i * spacing]}
+          >
+            <torusGeometry args={[8, tube, 32, 64]} />
+            <meshPhongMaterial color={colorNum} shininess={settings.ringShininess} wireframe />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
