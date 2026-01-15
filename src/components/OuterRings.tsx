@@ -54,10 +54,6 @@ export default function OuterRings({ settings }: { settings: Settings }) {
             position={[0, 0, -i * spacing]}
             castShadow
             receiveShadow
-              onUpdate={(mesh: any) => {
-                // place outer rings on layer 1 so postprocess can target them
-                mesh.layers.set(1);
-              }}
           >
             <torusGeometry args={[8, tube, 32, 64]} />
             <meshPhongMaterial color={colorNum} shininess={settings.ringShininess} wireframe />
