@@ -170,6 +170,13 @@ export default function ProceduralTunnel() {
     shapeType: 'cube',
   });
 
+  const gifRef = useRef<any>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
+  const framesCapturedRef = useRef<number>(0);
+  const readCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const readCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
   useEffect(() => {
     const gui = new GUI({ width: 300 });
 
@@ -205,9 +212,179 @@ export default function ProceduralTunnel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function CanvasCapturer({ isRecording }: { isRecording: boolean }) {
+    const { gl } = useThree();
+    useFrame(() => {
+      if (isRecording && gifRef.current && gl && gl.domElement) {
+        try {
+          const source = gl.domElement as HTMLCanvasElement;
+          const rc = readCanvasRef.current;
+          const rctx = readCtxRef.current;
+          if (rc && rctx) {
+            if (rc.width !== source.width || rc.height !== source.height) {
+              rc.width = source.width;
+              rc.height = source.height;
+            }
+            rctx.drawImage(source, 0, 0);
+            try {
+              const data = rc.toDataURL('image/png');
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  gifRef.current.addFrame(img, { copy: true, delay: Math.round(1000 / 30) });
+                  framesCapturedRef.current += 1;
+                } catch (e) {
+                  // ignore
+                }
+              };
+              img.src = data;
+            } catch (e) {
+              // fallback direct canvas
+              try {
+                gifRef.current.addFrame(rc, { copy: true, delay: Math.round(1000 / 30) });
+                framesCapturedRef.current += 1;
+              } catch (ee) {
+                // ignore
+              }
+            }
+          } else {
+            // fallback: use toDataURL from source canvas
+            try {
+              const data = source.toDataURL('image/png');
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  gifRef.current.addFrame(img, { copy: true, delay: Math.round(1000 / 30) });
+                  framesCapturedRef.current += 1;
+                } catch (e) {
+                  // ignore
+                }
+              };
+              img.src = data;
+            } catch (e) {
+              try {
+                gifRef.current.addFrame(source, { copy: true, delay: Math.round(1000 / 30) });
+                framesCapturedRef.current += 1;
+              } catch (ee) {
+                // ignore
+              }
+            }
+          }
+        } catch (e) {
+          // swallow capture errors
+        }
+      }
+    });
+    return null;
+  }
+
+  const startRecording = async () => {
+    if (isRecording) return;
+    try {
+      const gifScript = 'https://unpkg.com/gif.js@0.2.0/dist/gif.js';
+      await new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${gifScript}"]`);
+        if (existing) return resolve();
+        const s = document.createElement('script');
+        s.src = gifScript;
+        s.onload = () => resolve();
+        s.onerror = (e) => reject(e);
+        document.head.appendChild(s);
+      });
+
+      // fetch worker script and create a same-origin blob URL to avoid cross-origin Worker errors
+      const workerResp = await fetch('https://unpkg.com/gif.js@0.2.0/dist/gif.worker.js');
+      const workerText = await workerResp.text();
+      const blob = new Blob([workerText], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(blob);
+
+      const GIFLib = (window as any).GIF || (window as any).gif;
+      if (!GIFLib) {
+        // eslint-disable-next-line no-console
+        console.error('gif.js lib not available on window after loading script');
+        return;
+      }
+
+      const gifOpts: any = { workers: 2, quality: 10, workerScript: workerUrl };
+      if (canvasEl) {
+        gifOpts.width = canvasEl.width;
+        gifOpts.height = canvasEl.height;
+      }
+      const gif = new GIFLib(gifOpts);
+      gifRef.current = gif;
+      gif.on('finished', (blob: Blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'capture.gif';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        // revoke worker blob
+        URL.revokeObjectURL(workerUrl);
+      });
+
+      // debug
+      // eslint-disable-next-line no-console
+      console.log('GIF recorder started', { workerUrl, width: gifOpts.width, height: gifOpts.height });
+
+      // prepare read canvas (same-origin, with willReadFrequently)
+      if (canvasEl) {
+        try {
+          const rc = document.createElement('canvas');
+          rc.width = canvasEl.width;
+          rc.height = canvasEl.height;
+          const rctx = rc.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null;
+          readCanvasRef.current = rc;
+          readCtxRef.current = rctx;
+        } catch (e) {
+          readCanvasRef.current = null;
+          readCtxRef.current = null;
+        }
+      }
+
+      setIsRecording(true);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to start GIF recorder', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!isRecording || !gifRef.current) return;
+    try {
+      const gif = gifRef.current;
+      // if no frames captured yet, attempt one final add
+      if (framesCapturedRef.current === 0 && canvasEl) {
+        try {
+          gif.addFrame(canvasEl, { copy: true, delay: Math.round(1000 / 30) });
+          framesCapturedRef.current += 1;
+          // eslint-disable-next-line no-console
+          if (framesCapturedRef.current % 10 === 0) console.log('Captured frames', framesCapturedRef.current);
+        } catch (e) {
+          // ignore
+        }
+      }
+      gif.render();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to stop GIF recorder', err);
+    } finally {
+      gifRef.current = null;
+      setIsRecording(false);
+      framesCapturedRef.current = 0;
+    }
+  };
+
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: '#000', display: 'flex', flexDirection: 'column', zIndex: 0 }}>
-      <Canvas camera={{ position: [0, 0, 5], fov: 75 }} style={{ position: 'absolute', inset: 0, zIndex: 0 }} gl={{ antialias: true }}>
+      <Canvas
+        camera={{ position: [0, 0, 5], fov: 75 }}
+        style={{ position: 'absolute', inset: 0, zIndex: 0 }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, alpha: false }}
+        onCreated={(state) => setCanvasEl(state.gl.domElement)}
+      >
         <color attach="background" args={[new THREE.Color(settings.bgColor).getHex()]} />
         <fog attach="fog" args={[new THREE.Color(settings.bgColor).getHex(), settings.fogNear, settings.fogFar]} />
         <ambientLight intensity={0.5} />
@@ -215,7 +392,23 @@ export default function ProceduralTunnel() {
 
         <OuterRings settings={settings} />
         <InnerShapes settings={settings} />
+        <CanvasCapturer isRecording={isRecording} />
       </Canvas>
+
+      <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, display: 'flex', gap: 8 }}>
+        {!isRecording ? (
+          <button onClick={startRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#ff0066', color: '#fff', border: 'none' }}>
+            Start Recording GIF
+          </button>
+        ) : (
+          <>
+            <div style={{ alignSelf: 'center', color: '#fff', fontWeight: 600 }}>Recording...</div>
+            <button onClick={stopRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#00aaff', color: '#fff', border: 'none' }}>
+              Stop & Save GIF
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
