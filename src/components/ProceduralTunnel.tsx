@@ -6,6 +6,7 @@ import type { Settings } from './types';
 import OuterRings from './OuterRings';
 import InnerShapes from './InnerShapes';
 import CanvasCapturer from './CanvasCapturer';
+import VortexGlowPass from './VortexGlowPass';
 
 export default function ProceduralTunnel() {
   const [settings, setSettings] = useState<Settings>({
@@ -199,6 +200,7 @@ export default function ProceduralTunnel() {
 
         <OuterRings settings={settings} />
         <InnerShapes settings={settings} />
+        <VortexGlowPass settings={settings} />
         <CanvasCapturer isRecording={isRecording} gifRef={gifRef} readCanvasRef={readCanvasRef} readCtxRef={readCtxRef} framesCapturedRef={framesCapturedRef} />
       </Canvas>
 
