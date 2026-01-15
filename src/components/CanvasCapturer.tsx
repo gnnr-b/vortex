@@ -1,12 +1,12 @@
-import React from 'react';
+import type { MutableRefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 
 type Props = {
   isRecording: boolean;
-  gifRef: React.MutableRefObject<any>;
-  readCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
-  readCtxRef: React.MutableRefObject<CanvasRenderingContext2D | null>;
-  framesCapturedRef: React.MutableRefObject<number>;
+  gifRef: MutableRefObject<any>;
+  readCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+  readCtxRef: MutableRefObject<CanvasRenderingContext2D | null>;
+  framesCapturedRef: MutableRefObject<number>;
 };
 
 export default function CanvasCapturer({ isRecording, gifRef, readCanvasRef, readCtxRef, framesCapturedRef }: Props) {

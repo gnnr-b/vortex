@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
@@ -58,8 +58,8 @@ const SwirlRefractionShader = {
 };
 
 export default function PostProcessing({ settings }: Props) {
-  const composerRef = useRef<EffectComposer | null>(null);
-  const shaderPassRef = useRef<ShaderPass | null>(null);
+  const composerRef = useRef<any | null>(null);
+  const shaderPassRef = useRef<any | null>(null);
   const { scene, gl, size, camera } = useThree();
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import { useMemo, useRef, Fragment } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Settings } from './types';
@@ -96,7 +96,7 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
   return (
     <group>
       {shapes.map((s, i) => (
-        <React.Fragment key={`shape-${i}`}>
+        <Fragment key={`shape-${i}`}>
         <mesh
             key={`shape-${i}`}
             ref={(el) => (meshRefs.current[i] = el)}
@@ -133,7 +133,7 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
             opacity={settings.innerGlowEnabled ? Math.min(1, (settings.innerGlowIntensity || 1) * 0.5) : 0}
           />
         </sprite>
-        </React.Fragment>
+        </Fragment>
       ))}
     </group>
   );
