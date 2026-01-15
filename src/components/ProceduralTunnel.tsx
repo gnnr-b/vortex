@@ -6,6 +6,7 @@ import type { Settings } from './types';
 import OuterRings from './OuterRings';
 import InnerShapes from './InnerShapes';
 import CanvasCapturer from './CanvasCapturer';
+import PostProcessing from './PostProcessing';
 
 export default function ProceduralTunnel() {
   const [settings, setSettings] = useState<Settings>({
@@ -200,6 +201,7 @@ export default function ProceduralTunnel() {
         <OuterRings settings={settings} />
         <InnerShapes settings={settings} />
         <CanvasCapturer isRecording={isRecording} gifRef={gifRef} readCanvasRef={readCanvasRef} readCtxRef={readCtxRef} framesCapturedRef={framesCapturedRef} />
+        <PostProcessing settings={settings} />
       </Canvas>
 
       <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, display: 'flex', gap: 8 }}>
