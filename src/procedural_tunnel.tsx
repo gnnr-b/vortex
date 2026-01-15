@@ -1,290 +1,221 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import GUI from 'lil-gui';
 
-export default function ProceduralTunnel() {
-  const containerRef = useRef(null);
-  const [color1, setColor1] = useState('#ff0066');
-  const [color2, setColor2] = useState('#00ffff');
-  const [shapeType, setShapeType] = useState('cube');
-  const sceneRef = useRef(null);
-  const innerShapesRef = useRef([]);
-  const outerRingsRef = useRef([]);
+type Settings = {
+  color1: string;
+  color2: string;
+  bgColor: string;
+  outerRingCount: number;
+  outerSpacing: number;
+  ringRotationSpeed: number;
+  cameraSpeed: number;
+  ringShininess: number;
+  innerShapesPerRing: number;
+  innerZSegments: number;
+  innerRadius: number;
+  innerZSpacing: number;
+  innerSpiralRotation: number;
+  innerAngularSpeedScale: number;
+  fogNear: number;
+  fogFar: number;
+  shapeType: string;
+};
 
-  // Helper to create geometry for a given shape type
-  const createShape = (type: string) => {
-    let geometry;
-    switch (type) {
-      case 'sphere':
-        geometry = new THREE.SphereGeometry(0.5, 16, 16);
-        break;
-      case 'tetrahedron':
-        geometry = new THREE.TetrahedronGeometry(0.6);
-        break;
-      default:
-        geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+function OuterRings({ settings }: { settings: Settings }) {
+  const ringCount = settings.outerRingCount;
+  const spacing = settings.outerSpacing;
+  const ringsRef = useRef<(THREE.Mesh | null)[]>([]);
+
+  useFrame((state) => {
+    state.camera.position.z -= settings.cameraSpeed;
+    const cameraZ = state.camera.position.z;
+
+    for (let i = 0; i < ringCount; i++) {
+      const mesh = ringsRef.current[i] as unknown as THREE.Mesh | undefined;
+      if (!mesh) continue;
+      mesh.rotation.z += settings.ringRotationSpeed;
+
+      if (mesh.position.z > cameraZ + spacing) {
+        mesh.position.z -= ringCount * spacing;
+      }
+
+      const totalLen = ringCount * spacing;
+      const progress = ((mesh.position.z - cameraZ + totalLen) % totalLen) / totalLen;
+      const c1 = new THREE.Color(settings.color1);
+      const c2 = new THREE.Color(settings.color2);
+      (mesh.material as THREE.MeshPhongMaterial).color.lerpColors(c1, c2, progress);
     }
-    return geometry;
-  };
+  });
 
-  // Create or recreate inner shapes; safe to call from any hook
-  const createInnerShapes = (type: string) => {
-    const scene = sceneRef.current as THREE.Scene | null;
-    if (!scene) return;
+  return (
+    <group>
+      {new Array(ringCount).fill(0).map((_, i) => (
+        <mesh
+          key={`ring-${i}`}
+          ref={(el) => (ringsRef.current[i] = el)}
+          position={[0, 0, -i * spacing]}
+        >
+          <torusGeometry args={[8, 0.3, 16, 32]} />
+          <meshPhongMaterial color={settings.color1} shininess={settings.ringShininess} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
 
-    // Clear existing shapes
-    innerShapesRef.current.forEach((s: THREE.Object3D) => scene.remove(s));
-    innerShapesRef.current = [];
+function InnerShapes({ settings }: { settings: Settings }) {
+  const zSegments = settings.innerZSegments;
+  const shapesPerRing = settings.innerShapesPerRing;
+  const radius = settings.innerRadius;
+  const zSpacing = settings.innerZSpacing;
+  const spiralRotation = settings.innerSpiralRotation;
 
-    const innerShapes: THREE.Mesh[] = [];
-    const zSegments = 50;
-    const shapesPerRing = 12;
-    const radius = 5;
-    const zSpacing = 1.5;
-    const spiralRotation = 0.3; // Rotation per segment to create spiral
-
+  const shapes = useMemo(() => {
+    const result: Array<any> = [];
     for (let z = 0; z < zSegments; z++) {
       for (let i = 0; i < shapesPerRing; i++) {
-        const geometry = createShape(type);
-        const material = new THREE.MeshPhongMaterial({
-          color: Math.random() * 0xffffff,
-          shininess: 50,
-        });
-        const shape = new THREE.Mesh(geometry, material);
-
         const baseAngle = (i / shapesPerRing) * Math.PI * 2;
         const spiralOffset = z * spiralRotation;
-
         const phase = Math.random() * Math.PI * 2;
         const speedBase = 0.6 + (z / zSegments) * 0.8;
-        const angularSpeed = speedBase * (0.8 + Math.random() * 0.8);
-
+        const angularSpeed = speedBase * (0.8 + Math.random() * 0.8) * settings.innerAngularSpeedScale;
         const angle = baseAngle + spiralOffset + phase;
-
-        shape.position.x = Math.cos(angle) * radius;
-        shape.position.y = Math.sin(angle) * radius;
-        shape.position.z = -z * zSpacing;
-
-        shape.rotation.x = Math.random() * Math.PI;
-        shape.rotation.y = Math.random() * Math.PI;
-
-        (shape as any).userData = {
+        result.push({
           baseAngle,
           spiralOffset,
           phase,
           angularSpeed,
           radius,
           zIndex: z,
-        };
-
-        scene.add(shape);
-        innerShapes.push(shape);
+          angle,
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius,
+          z: -z * zSpacing,
+        });
       }
     }
+    return result;
+  }, [settings.shapeType, zSegments, shapesPerRing, radius, zSpacing, spiralRotation, settings.innerAngularSpeedScale]);
 
-    innerShapesRef.current = innerShapes;
-  };
+  const meshRefs = useRef<Array<THREE.Mesh | null>>([]);
+
+  const { camera } = useThree();
+
+  useFrame(() => {
+    const t = performance.now() * 0.001;
+    const cameraZ = (camera.position.z as number) || 0;
+
+    for (let i = 0; i < shapes.length; i++) {
+      const m = meshRefs.current[i];
+      if (!m) continue;
+      const ud = shapes[i];
+      const angle = ud.baseAngle + ud.spiralOffset + ud.phase + t * ud.angularSpeed;
+      m.position.x = Math.cos(angle) * ud.radius;
+      m.position.y = Math.sin(angle) * ud.radius;
+
+      m.rotation.x += 0.01 + (i % 3) * 0.002;
+      m.rotation.y += 0.01 + (i % 4) * 0.002;
+
+      if (m.position.z > cameraZ + 5) {
+        m.position.z -= zSegments * zSpacing;
+        ud.phase = Math.random() * Math.PI * 2;
+        ud.angularSpeed = 0.6 + Math.random() * 1.0;
+      }
+    }
+  });
+
+  return (
+    <group>
+      {shapes.map((s, i) => (
+        <mesh
+          key={`shape-${i}`}
+          ref={(el) => (meshRefs.current[i] = el)}
+          position={[s.x, s.y, s.z]}
+          rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
+        >
+          {settings.shapeType === 'sphere' ? (
+            <sphereGeometry args={[0.5, 16, 16]} />
+          ) : settings.shapeType === 'tetrahedron' ? (
+            <tetrahedronGeometry args={[0.6]} />
+          ) : (
+            <boxGeometry args={[0.8, 0.8, 0.8]} />
+          )}
+          <meshPhongMaterial color={new THREE.Color(Math.random() * 0xffffff)} shininess={50} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+export default function ProceduralTunnel() {
+  const [settings, setSettings] = useState<Settings>({
+    color1: '#ff0066',
+    color2: '#00ffff',
+    bgColor: '#000000',
+    outerRingCount: 50,
+    outerSpacing: 2,
+    ringRotationSpeed: 0.01,
+    cameraSpeed: 0.05,
+    ringShininess: 100,
+    innerShapesPerRing: 12,
+    innerZSegments: 50,
+    innerRadius: 5,
+    innerZSpacing: 1.5,
+    innerSpiralRotation: 0.3,
+    innerAngularSpeedScale: 1.0,
+    fogNear: 1,
+    fogFar: 50,
+    shapeType: 'cube',
+  });
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const gui = new GUI({ width: 300 });
 
-    // Scene setup
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x000000, 1, 50);
-    sceneRef.current = scene;
+    const outer = gui.addFolder('Outer Rings');
+    outer.addColor(settings, 'color1').name('Color 1').onChange((v: string) => setSettings(s => ({ ...s, color1: v })));
+    outer.addColor(settings, 'color2').name('Color 2').onChange((v: string) => setSettings(s => ({ ...s, color2: v })));
+    outer.add(settings, 'outerRingCount', 10, 200, 1).name('Ring Count').onChange((v: number) => setSettings(s => ({ ...s, outerRingCount: v })));
+    outer.add(settings, 'outerSpacing', 0.5, 5, 0.1).name('Spacing').onChange((v: number) => setSettings(s => ({ ...s, outerSpacing: v })));
+    outer.add(settings, 'ringRotationSpeed', 0, 0.2, 0.001).name('Ring Rot Speed').onChange((v: number) => setSettings(s => ({ ...s, ringRotationSpeed: v })));
+    outer.add(settings, 'cameraSpeed', 0, 1, 0.01).name('Camera Speed').onChange((v: number) => setSettings(s => ({ ...s, cameraSpeed: v })));
+    outer.add(settings, 'ringShininess', 0, 200, 1).name('Shininess').onChange((v: number) => setSettings(s => ({ ...s, ringShininess: v })));
+    outer.open();
 
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      containerRef.current.clientWidth / containerRef.current.clientHeight,
-      0.1,
-      1000
-    );
-    camera.position.z = 5;
+    const inner = gui.addFolder('Inner Shapes');
+    inner.add(settings, 'shapeType', ['cube', 'sphere', 'tetrahedron']).name('Shape').onChange((v: string) => setSettings(s => ({ ...s, shapeType: v })));
+    inner.add(settings, 'innerShapesPerRing', 4, 24, 1).name('Per Ring').onChange((v: number) => setSettings(s => ({ ...s, innerShapesPerRing: v })));
+    inner.add(settings, 'innerZSegments', 10, 200, 1).name('Z Segments').onChange((v: number) => setSettings(s => ({ ...s, innerZSegments: v })));
+    inner.add(settings, 'innerRadius', 1, 10, 0.1).name('Radius').onChange((v: number) => setSettings(s => ({ ...s, innerRadius: v })));
+    inner.add(settings, 'innerZSpacing', 0.2, 3, 0.1).name('Z Spacing').onChange((v: number) => setSettings(s => ({ ...s, innerZSpacing: v })));
+    inner.add(settings, 'innerSpiralRotation', 0, 1, 0.01).name('Spiral Rot').onChange((v: number) => setSettings(s => ({ ...s, innerSpiralRotation: v })));
+    inner.add(settings, 'innerAngularSpeedScale', 0, 3, 0.01).name('Speed Scale').onChange((v: number) => setSettings(s => ({ ...s, innerAngularSpeedScale: v })));
+    inner.open();
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio || 1);
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    // Ensure the canvas fills the container even if Tailwind isn't present
-    const canvas = renderer.domElement;
-    canvas.style.display = 'block';
-    canvas.style.position = 'absolute';
-    canvas.style.top = '0';
-    canvas.style.left = '0';
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    containerRef.current.appendChild(canvas);
-
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-
-    const pointLight = new THREE.PointLight(0xffffff, 1);
-    pointLight.position.set(0, 0, 10);
-    scene.add(pointLight);
-
-    // Create outer tunnel (rings)
-    const outerRings = [];
-    const ringCount = 50;
-    const spacing = 2;
-
-    for (let i = 0; i < ringCount; i++) {
-      const geometry = new THREE.TorusGeometry(8, 0.3, 16, 32);
-      const material = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        shininess: 100
-      });
-      const ring = new THREE.Mesh(geometry, material);
-      ring.position.z = -i * spacing;
-      scene.add(ring);
-      outerRings.push(ring);
-    }
-    outerRingsRef.current = outerRings;
-
-    // create inner shapes now that scene is available
-    createInnerShapes(shapeType);
-
-    // Animation
-    let cameraZ = 5;
-    const animate = () => {
-      requestAnimationFrame(animate);
-
-      // Move camera forward
-      cameraZ -= 0.05;
-      camera.position.z = cameraZ;
-
-      // Loop outer rings
-      outerRings.forEach((ring, i) => {
-        ring.rotation.z += 0.01;
-        
-        // Reset position when ring passes camera
-        if (ring.position.z > cameraZ + spacing) {
-          ring.position.z -= ringCount * spacing;
-        }
-
-        // Color gradient
-        const progress = ((ring.position.z - cameraZ + ringCount * spacing) % (ringCount * spacing)) / (ringCount * spacing);
-        const c1 = new THREE.Color(color1);
-        const c2 = new THREE.Color(color2);
-        ring.material.color.lerpColors(c1, c2, progress);
-      });
-
-      // Per-shape vortex motion: update polar angle for each shape independently
-      const zSegments = 50;
-      const zSpacing = 1.5;
-      const t = performance.now() * 0.001;
-
-      innerShapesRef.current.forEach((shape: any, i) => {
-        const ud = shape.userData || {};
-        const baseAngle = ud.baseAngle ?? 0;
-        const spiralOffset = ud.spiralOffset ?? 0;
-        const phase = ud.phase ?? 0;
-        const angularSpeed = ud.angularSpeed ?? 0.8;
-        const radiusVal = ud.radius ?? 5;
-
-        const angle = baseAngle + spiralOffset + phase + t * angularSpeed;
-        shape.position.x = Math.cos(angle) * radiusVal;
-        shape.position.y = Math.sin(angle) * radiusVal;
-
-        // small per-shape self-rotation for visual variety
-        shape.rotation.x += 0.01 + (i % 3) * 0.002;
-        shape.rotation.y += 0.01 + (i % 4) * 0.002;
-
-        // Reset position when shape passes camera and randomize phase to avoid unison
-        if (shape.position.z > cameraZ + 5) {
-          shape.position.z -= zSegments * zSpacing;
-          shape.userData.phase = Math.random() * Math.PI * 2;
-          shape.userData.angularSpeed = 0.6 + Math.random() * 1.0;
-        }
-      });
-
-      renderer.render(scene, camera);
-    };
-
-    animate();
-
-    // Handle resize
-    const handleResize = () => {
-      if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setPixelRatio(window.devicePixelRatio || 1);
-      renderer.setSize(w, h);
-    };
-
-    window.addEventListener('resize', handleResize);
+    const env = gui.addFolder('Environment');
+    env.addColor(settings, 'bgColor').name('BG Color').onChange((v: string) => setSettings(s => ({ ...s, bgColor: v })));
+    env.add(settings, 'fogNear', 0.1, 20, 0.1).name('Fog Near').onChange((v: number) => setSettings(s => ({ ...s, fogNear: v })));
+    env.add(settings, 'fogFar', 10, 200, 1).name('Fog Far').onChange((v: number) => setSettings(s => ({ ...s, fogFar: v })));
+    env.open();
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      containerRef.current?.removeChild(renderer.domElement);
-      renderer.dispose();
+      gui.destroy();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Update colors
-  useEffect(() => {
-    if (!sceneRef.current || !outerRingsRef.current.length) return;
-    
-    outerRingsRef.current.forEach((ring, i) => {
-      const progress = i / outerRingsRef.current.length;
-      const c1 = new THREE.Color(color1);
-      const c2 = new THREE.Color(color2);
-      ring.material.color.lerpColors(c1, c2, progress);
-    });
-  }, [color1, color2]);
-
-  // Update shape type
-  useEffect(() => {
-    if (!sceneRef.current) return;
-
-    const scene = sceneRef.current;
-    
-    // Recreate shapes using the shared creation helper so they include userData
-    innerShapesRef.current.forEach(s => scene.remove(s));
-    innerShapesRef.current = [];
-    createInnerShapes(shapeType);
-  }, [shapeType]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: '#000', display: 'flex', flexDirection: 'column', zIndex: 0 }}>
-      <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2, background: 'rgba(17,17,17,0.9)', padding: 12, borderRadius: 8, color: '#fff' }}>
-        <h2 className="text-white text-xl font-bold mb-4">Tunnel Controls</h2>
-        
-        <div className="mb-4">
-          <label className="text-white block mb-2">Outer Tunnel Color 1:</label>
-          <input
-            type="color"
-            value={color1}
-            onChange={(e) => setColor1(e.target.value)}
-            className="w-full h-10 cursor-pointer"
-          />
-        </div>
+      <Canvas camera={{ position: [0, 0, 5], fov: 75 }} style={{ position: 'absolute', inset: 0, zIndex: 0 }} gl={{ antialias: true }}>
+        <color attach="background" args={[new THREE.Color(settings.bgColor).getHex()]} />
+        <fog attach="fog" args={[new THREE.Color(settings.bgColor).getHex(), settings.fogNear, settings.fogFar]} />
+        <ambientLight intensity={0.5} />
+        <pointLight position={[0, 0, 10]} intensity={1} />
 
-        <div className="mb-4">
-          <label className="text-white block mb-2">Outer Tunnel Color 2:</label>
-          <input
-            type="color"
-            value={color2}
-            onChange={(e) => setColor2(e.target.value)}
-            className="w-full h-10 cursor-pointer"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="text-white block mb-2">Inner Tunnel Shape:</label>
-          <select
-            value={shapeType}
-            onChange={(e) => setShapeType(e.target.value)}
-            className="w-full p-2 rounded bg-gray-800 text-white border border-gray-700"
-          >
-            <option value="cube">Cubes</option>
-            <option value="sphere">Spheres</option>
-            <option value="tetrahedron">Tetrahedrons</option>
-          </select>
-        </div>
-      </div>
-
-      <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }} />
+        <OuterRings settings={settings} />
+        <InnerShapes settings={settings} />
+      </Canvas>
     </div>
   );
 }
