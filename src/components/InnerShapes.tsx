@@ -3,6 +3,24 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Settings } from './types';
 
+function makeGlowTexture(hexColor: string, size = 256) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  const cx = size / 2;
+  const cy = size / 2;
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.2, hexColor);
+  grad.addColorStop(0.6, 'rgba(0,0,0,0.15)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export default function InnerShapes({ settings }: { settings: Settings }) {
   const zSegments = settings.innerZSegments;
   const shapesPerRing = settings.innerShapesPerRing;
@@ -38,6 +56,7 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
   }, [settings.shapeType, zSegments, shapesPerRing, radius, zSpacing, spiralRotation, settings.innerAngularSpeedScale]);
 
   const meshRefs = useRef<Array<THREE.Mesh | null>>([]);
+  const spriteRefs = useRef<Array<THREE.Sprite | null>>([]);
 
   const { camera } = useThree();
 
@@ -61,12 +80,23 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
         ud.phase = Math.random() * Math.PI * 2;
         ud.angularSpeed = 0.6 + Math.random() * 1.0;
       }
+      const sp = spriteRefs.current[i];
+      if (sp) {
+        sp.position.x = m.position.x;
+        sp.position.y = m.position.y;
+        sp.position.z = m.position.z + 0.01;
+        // scale sprite slightly with pulsing
+        const pulse = 1 + Math.sin(t * 4 + i) * 0.08;
+        sp.scale.set(settings.innerGlowSize * pulse, settings.innerGlowSize * pulse, 1);
+        sp.material.opacity = settings.innerGlowEnabled ? Math.min(1, (settings.innerGlowIntensity || 1) * 0.5) : 0;
+      }
     }
   });
 
   return (
     <group>
       {shapes.map((s, i) => (
+        <>
         <mesh
             key={`shape-${i}`}
             ref={(el) => (meshRefs.current[i] = el)}
@@ -82,8 +112,28 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
           ) : (
             <boxGeometry args={[0.8, 0.8, 0.8]} />
           )}
-          <meshPhongMaterial color={new THREE.Color(Math.random() * 0xffffff)} shininess={50} wireframe={settings.innerWireframe} />
+          <meshStandardMaterial
+            color={new THREE.Color(Math.random() * 0xffffff)}
+            emissive={new THREE.Color(settings.innerGlowColor || settings.color1)}
+            emissiveIntensity={settings.innerGlowIntensity || 1}
+            roughness={0.1}
+            metalness={0.0}
+            wireframe={settings.innerWireframe}
+          />
         </mesh>
+
+        {/* additive sprite halo to fake a bloom/halo per-shape */}
+        <sprite key={`glow-${i}`} ref={(el) => (spriteRefs.current[i] = el)} position={[s.x, s.y, s.z + 0.01]} scale={[settings.innerGlowSize, settings.innerGlowSize, 1]} renderOrder={100}>
+          <spriteMaterial
+            map={makeGlowTexture(settings.innerGlowColor || settings.color1)}
+            color={new THREE.Color(settings.innerGlowColor || settings.color1).getHex()}
+            transparent
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+            opacity={settings.innerGlowEnabled ? Math.min(1, (settings.innerGlowIntensity || 1) * 0.5) : 0}
+          />
+        </sprite>
+      </>
       ))}
     </group>
   );

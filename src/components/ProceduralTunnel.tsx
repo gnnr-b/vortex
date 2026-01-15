@@ -25,6 +25,11 @@ export default function ProceduralTunnel() {
     innerSpiralRotation: 0.3,
     innerAngularSpeedScale: 1.0,
     innerWireframe: false,
+    // Inner glow defaults (start high)
+    innerGlowEnabled: true,
+    innerGlowColor: '#ff66ff',
+    innerGlowIntensity: 6.0,
+    innerGlowSize: 3.2,
     fogNear: 1,
     fogFar: 50,
     shapeType: 'cube',
@@ -59,6 +64,10 @@ export default function ProceduralTunnel() {
     inner.add(settings, 'innerZSpacing', 0.2, 3, 0.1).name('Z Spacing').onChange((v: number) => setSettings(s => ({ ...s, innerZSpacing: v })));
     inner.add(settings, 'innerSpiralRotation', 0, 1, 0.01).name('Spiral Rot').onChange((v: number) => setSettings(s => ({ ...s, innerSpiralRotation: v })));
     inner.add(settings, 'innerAngularSpeedScale', 0, 3, 0.01).name('Speed Scale').onChange((v: number) => setSettings(s => ({ ...s, innerAngularSpeedScale: v })));
+    inner.add(settings, 'innerGlowEnabled').name('Glow Enabled').onChange((v: boolean) => setSettings(s => ({ ...s, innerGlowEnabled: v })));
+    inner.addColor(settings, 'innerGlowColor').name('Glow Color').onChange((v: string) => setSettings(s => ({ ...s, innerGlowColor: v })));
+    inner.add(settings, 'innerGlowIntensity', 6.0, 12, 0.1).name('Glow Intensity').onChange((v: number) => setSettings(s => ({ ...s, innerGlowIntensity: v })));
+    inner.add(settings, 'innerGlowSize', 3.2, 8, 0.05).name('Glow Size').onChange((v: number) => setSettings(s => ({ ...s, innerGlowSize: v })));
     inner.open();
 
     const env = gui.addFolder('Environment');
@@ -66,6 +75,10 @@ export default function ProceduralTunnel() {
     env.add(settings, 'fogNear', 0.1, 20, 0.1).name('Fog Near').onChange((v: number) => setSettings(s => ({ ...s, fogNear: v })));
     env.add(settings, 'fogFar', 10, 200, 1).name('Fog Far').onChange((v: number) => setSettings(s => ({ ...s, fogFar: v })));
     env.open();
+
+    
+
+    
 
     return () => {
       gui.destroy();
