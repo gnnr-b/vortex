@@ -5,7 +5,6 @@ import GUI from 'lil-gui';
 import type { Settings } from './types';
 import OuterRings from './OuterRings';
 import InnerShapes from './InnerShapes';
-import CanvasCapturer from './CanvasCapturer';
 import PostProcessing from './PostProcessing';
 
 export default function ProceduralTunnel() {
@@ -36,12 +35,7 @@ export default function ProceduralTunnel() {
     shapeType: 'cube',
   });
 
-  const gifRef = useRef<any>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
-  const framesCapturedRef = useRef<number>(0);
-  const readCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const readCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   // MediaRecorder (video) refs/state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -92,81 +86,7 @@ export default function ProceduralTunnel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startRecording = async () => {
-    if (isRecording) return;
-    try {
-      const CAPTURE_SCALE = 0.6; // must match CanvasCapturer scale
-      const gifScript = 'https://unpkg.com/gif.js@0.2.0/dist/gif.js';
-      await new Promise<void>((resolve, reject) => {
-        const existing = document.querySelector(`script[src="${gifScript}"]`);
-        if (existing) return resolve();
-        const s = document.createElement('script');
-        s.src = gifScript;
-        s.onload = () => resolve();
-        s.onerror = (e) => reject(e);
-        document.head.appendChild(s);
-      });
-
-      const workerResp = await fetch('https://unpkg.com/gif.js@0.2.0/dist/gif.worker.js');
-      const workerText = await workerResp.text();
-      const blob = new Blob([workerText], { type: 'application/javascript' });
-      const workerUrl = URL.createObjectURL(blob);
-
-      const GIFLib = (window as any).GIF || (window as any).gif;
-      if (!GIFLib) {
-        console.error('gif.js lib not available on window after loading script');
-        return;
-      }
-
-      const gifOpts: any = { workers: 2, quality: 10, workerScript: workerUrl };
-      // eslint-disable-next-line no-console
-      console.debug('GIF recorder starting', { width: canvasEl?.width, height: canvasEl?.height, workerUrl });
-      if (canvasEl) {
-        const scaledW = Math.max(1, Math.round(canvasEl.width * CAPTURE_SCALE));
-        const scaledH = Math.max(1, Math.round(canvasEl.height * CAPTURE_SCALE));
-        gifOpts.width = scaledW;
-        gifOpts.height = scaledH;
-      }
-      const gif = new GIFLib(gifOpts);
-      gifRef.current = gif;
-      gif.on('finished', (blob: Blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'capture.gif';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        URL.revokeObjectURL(workerUrl);
-      });
-
-      // GIF recorder started
-
-      if (canvasEl) {
-        try {
-          const scaledW = Math.max(1, Math.round(canvasEl.width * CAPTURE_SCALE));
-          const scaledH = Math.max(1, Math.round(canvasEl.height * CAPTURE_SCALE));
-          const rc = document.createElement('canvas');
-          rc.width = scaledW;
-          rc.height = scaledH;
-          const rctx = rc.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null;
-          readCanvasRef.current = rc;
-          readCtxRef.current = rctx;
-        } catch (e) {
-          readCanvasRef.current = null;
-          readCtxRef.current = null;
-        }
-      }
-
-      // eslint-disable-next-line no-console
-      console.debug('GIF recorder ready', { readCanvas: !!readCanvasRef.current, readCtx: !!readCtxRef.current });
-
-      setIsRecording(true);
-    } catch (err) {
-      console.error('Failed to start GIF recorder', err);
-    }
-  };
+  
 
   const startMediaRecording = async () => {
     if (isMediaRecording || !canvasEl) return;
@@ -230,30 +150,6 @@ export default function ProceduralTunnel() {
     }
   };
 
-  const stopRecording = async () => {
-    if (!isRecording || !gifRef.current) return;
-    try {
-      const gif = gifRef.current;
-      if (framesCapturedRef.current === 0 && canvasEl) {
-        try {
-          gif.addFrame(canvasEl, { copy: true, delay: Math.round(1000 / 30) });
-          framesCapturedRef.current += 1;
-          if (framesCapturedRef.current % 10 === 0) {
-            // progress checkpoint
-          }
-        } catch (e) {
-        }
-      }
-      gif.render();
-    } catch (err) {
-      console.error('Failed to stop GIF recorder', err);
-    } finally {
-      gifRef.current = null;
-      setIsRecording(false);
-      framesCapturedRef.current = 0;
-    }
-  };
-
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: '#000', display: 'flex', flexDirection: 'column', zIndex: 0 }}>
         <Canvas
@@ -279,25 +175,10 @@ export default function ProceduralTunnel() {
 
         <OuterRings settings={settings} />
         <InnerShapes settings={settings} />
-        <CanvasCapturer isRecording={isRecording} gifRef={gifRef} readCanvasRef={readCanvasRef} readCtxRef={readCtxRef} framesCapturedRef={framesCapturedRef} />
         <PostProcessing settings={settings} />
       </Canvas>
 
       <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, display: 'flex', gap: 8 }}>
-        {/* GIF recorder controls */}
-        {!isRecording ? (
-          <button onClick={startRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#ff0066', color: '#fff', border: 'none' }}>
-            Start Recording GIF
-          </button>
-        ) : (
-          <>
-            <div style={{ alignSelf: 'center', color: '#fff', fontWeight: 600 }}>Recording GIF...</div>
-            <button onClick={stopRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#00aaff', color: '#fff', border: 'none' }}>
-              Stop & Save GIF
-            </button>
-          </>
-        )}
-
         {/* MediaRecorder (video) controls */}
         {!isMediaRecording ? (
           <button onClick={startMediaRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#22aa44', color: '#fff', border: 'none' }}>
