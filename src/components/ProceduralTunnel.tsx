@@ -42,6 +42,11 @@ export default function ProceduralTunnel() {
   const framesCapturedRef = useRef<number>(0);
   const readCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const readCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  // MediaRecorder (video) refs/state
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const [isMediaRecording, setIsMediaRecording] = useState(false);
 
   useEffect(() => {
     const gui = new GUI({ width: 300 });
@@ -90,6 +95,7 @@ export default function ProceduralTunnel() {
   const startRecording = async () => {
     if (isRecording) return;
     try {
+      const CAPTURE_SCALE = 0.6; // must match CanvasCapturer scale
       const gifScript = 'https://unpkg.com/gif.js@0.2.0/dist/gif.js';
       await new Promise<void>((resolve, reject) => {
         const existing = document.querySelector(`script[src="${gifScript}"]`);
@@ -113,9 +119,13 @@ export default function ProceduralTunnel() {
       }
 
       const gifOpts: any = { workers: 2, quality: 10, workerScript: workerUrl };
+      // eslint-disable-next-line no-console
+      console.debug('GIF recorder starting', { width: canvasEl?.width, height: canvasEl?.height, workerUrl });
       if (canvasEl) {
-        gifOpts.width = canvasEl.width;
-        gifOpts.height = canvasEl.height;
+        const scaledW = Math.max(1, Math.round(canvasEl.width * CAPTURE_SCALE));
+        const scaledH = Math.max(1, Math.round(canvasEl.height * CAPTURE_SCALE));
+        gifOpts.width = scaledW;
+        gifOpts.height = scaledH;
       }
       const gif = new GIFLib(gifOpts);
       gifRef.current = gif;
@@ -135,9 +145,11 @@ export default function ProceduralTunnel() {
 
       if (canvasEl) {
         try {
+          const scaledW = Math.max(1, Math.round(canvasEl.width * CAPTURE_SCALE));
+          const scaledH = Math.max(1, Math.round(canvasEl.height * CAPTURE_SCALE));
           const rc = document.createElement('canvas');
-          rc.width = canvasEl.width;
-          rc.height = canvasEl.height;
+          rc.width = scaledW;
+          rc.height = scaledH;
           const rctx = rc.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null;
           readCanvasRef.current = rc;
           readCtxRef.current = rctx;
@@ -147,9 +159,74 @@ export default function ProceduralTunnel() {
         }
       }
 
+      // eslint-disable-next-line no-console
+      console.debug('GIF recorder ready', { readCanvas: !!readCanvasRef.current, readCtx: !!readCtxRef.current });
+
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start GIF recorder', err);
+    }
+  };
+
+  const startMediaRecording = async () => {
+    if (isMediaRecording || !canvasEl) return;
+    try {
+      const stream = (canvasEl as HTMLCanvasElement).captureStream(30); // target 30fps
+      mediaStreamRef.current = stream;
+
+      let options: MediaRecorderOptions = {};
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+        options = { mimeType: 'video/webm;codecs=vp9' };
+      } else if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+        options = { mimeType: 'video/webm;codecs=vp8' };
+      } else {
+        options = { mimeType: 'video/webm' };
+      }
+
+      const recorder = new MediaRecorder(stream, options);
+      recordedChunksRef.current = [];
+
+      recorder.ondataavailable = (e: BlobEvent) => {
+        if (e.data && e.data.size) recordedChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const chunks = recordedChunksRef.current;
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'capture.webm';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        // stop all tracks from the stream
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(t => t.stop());
+          mediaStreamRef.current = null;
+        }
+        mediaRecorderRef.current = null;
+        setIsMediaRecording(false);
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsMediaRecording(true);
+    } catch (err) {
+      console.error('Failed to start MediaRecorder', err);
+    }
+  };
+
+  const stopMediaRecording = async () => {
+    const rec = mediaRecorderRef.current;
+    if (!rec) return;
+    try {
+      rec.stop();
+    } catch (e) {
+      console.error('Error stopping MediaRecorder', e);
     }
   };
 
@@ -180,12 +257,12 @@ export default function ProceduralTunnel() {
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: '#000', display: 'flex', flexDirection: 'column', zIndex: 0 }}>
         <Canvas
-        shadows
-        camera={{ position: [0, 0, 5], fov: 75 }}
-        style={{ position: 'absolute', inset: 0, zIndex: 0 }}
-        gl={{ antialias: true, preserveDrawingBuffer: false, alpha: false }}
-        onCreated={(state) => setCanvasEl(state.gl.domElement)}
-      >
+          shadows
+          camera={{ position: [0, 0, 5], fov: 75 }}
+          style={{ position: 'absolute', inset: 0, zIndex: 0 }}
+          gl={{ antialias: true, preserveDrawingBuffer: true, alpha: false }}
+          onCreated={(state) => setCanvasEl(state.gl.domElement)}
+        >
         <color attach="background" args={[new THREE.Color(settings.bgColor).getHex()]} />
         <fog attach="fog" args={[new THREE.Color(settings.bgColor).getHex(), settings.fogNear, settings.fogFar]} />
         <ambientLight intensity={0.25} />
@@ -207,15 +284,30 @@ export default function ProceduralTunnel() {
       </Canvas>
 
       <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, display: 'flex', gap: 8 }}>
+        {/* GIF recorder controls */}
         {!isRecording ? (
           <button onClick={startRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#ff0066', color: '#fff', border: 'none' }}>
             Start Recording GIF
           </button>
         ) : (
           <>
-            <div style={{ alignSelf: 'center', color: '#fff', fontWeight: 600 }}>Recording...</div>
+            <div style={{ alignSelf: 'center', color: '#fff', fontWeight: 600 }}>Recording GIF...</div>
             <button onClick={stopRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#00aaff', color: '#fff', border: 'none' }}>
               Stop & Save GIF
+            </button>
+          </>
+        )}
+
+        {/* MediaRecorder (video) controls */}
+        {!isMediaRecording ? (
+          <button onClick={startMediaRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#22aa44', color: '#fff', border: 'none' }}>
+            Start Recording Video
+          </button>
+        ) : (
+          <>
+            <div style={{ alignSelf: 'center', color: '#fff', fontWeight: 600 }}>Recording Video...</div>
+            <button onClick={stopMediaRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#ffaa00', color: '#fff', border: 'none' }}>
+              Stop & Save Video
             </button>
           </>
         )}
