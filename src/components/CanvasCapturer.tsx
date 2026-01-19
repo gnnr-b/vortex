@@ -13,7 +13,6 @@ type Props = {
 export default function CanvasCapturer({ isRecording, gifRef, readCanvasRef, readCtxRef, framesCapturedRef }: Props) {
   const { gl } = useThree();
 
-  const pixelBufferRef = useRef<Uint8Array | null>(null);
   const lastCaptureRef = useRef<number>(0);
   const CAPTURE_FPS = 15; // throttle capture to reduce CPU/GPU load
   const CAPTURE_SCALE = 0.6; // downscale factor for frames before encoding
