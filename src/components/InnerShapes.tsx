@@ -14,8 +14,9 @@ function getGlowTexture(hexColor: string, size = 256) {
   const cx = size / 2;
   const cy = size / 2;
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
-  grad.addColorStop(0, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.2, hexColor);
+  // force the inner color to the target pink (#FF77FF) to avoid white hotspots
+  grad.addColorStop(0, 'rgba(255,119,255,1)');
+  grad.addColorStop(0.2, 'rgba(255,119,255,0.9)');
   grad.addColorStop(0.6, 'rgba(0,0,0,0.15)');
   grad.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grad;
@@ -98,10 +99,9 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
     }
   });
 
-  const glowTex = useMemo(() => getGlowTexture(settings.innerGlowColor || settings.color1, Math.max(128, Math.round((settings.innerGlowSize || 3) * 64))), [
-    settings.innerGlowColor,
+  // always generate the glow texture using the requested pink to ensure consistent tint
+  const glowTex = useMemo(() => getGlowTexture('#FF77FF', Math.max(128, Math.round((settings.innerGlowSize || 3) * 64))), [
     settings.innerGlowSize,
-    settings.color1,
   ]);
 
   return (
@@ -124,11 +124,14 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
             <boxGeometry args={[0.8, 0.8, 0.8]} />
           )}
           <meshStandardMaterial
-            color={new THREE.Color(Math.random() * 0xffffff)}
-            emissive={new THREE.Color(settings.innerGlowColor || settings.color1)}
-            emissiveIntensity={settings.innerGlowIntensity || 1}
-            roughness={0.1}
+            color={new THREE.Color('#FF77FF')}
+            emissive={new THREE.Color('#FF77FF')}
+            // clamp emissive to avoid HDR saturation/tone-mapping turning pink to white
+            emissiveIntensity={Math.min(1, settings.innerGlowIntensity || 1)}
+            // increase roughness to reduce specular white highlights
+            roughness={0.5}
             metalness={0.0}
+            toneMapped={false}
             wireframe={settings.innerWireframe}
           />
         </mesh>
@@ -137,11 +140,13 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
         <sprite key={`glow-${i}`} ref={(el) => (spriteRefs.current[i] = el)} position={[s.x, s.y, s.z + 0.01]} scale={[settings.innerGlowSize, settings.innerGlowSize, 1]} renderOrder={100}>
           <spriteMaterial
             map={glowTex}
-            color={new THREE.Color(settings.innerGlowColor || settings.color1).getHex()}
+            color={new THREE.Color('#FF77FF')}
             transparent
             depthWrite={false}
             blending={THREE.AdditiveBlending}
-            opacity={settings.innerGlowEnabled ? Math.min(1, (settings.innerGlowIntensity || 1) * 0.5) : 0}
+            // reduce sprite opacity scale to avoid additive clipping to white
+            opacity={settings.innerGlowEnabled ? Math.min(1, (settings.innerGlowIntensity || 1) * 0.08) : 0}
+            toneMapped={false}
           />
         </sprite>
         </Fragment>
