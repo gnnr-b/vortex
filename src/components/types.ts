@@ -18,9 +18,9 @@ export type Settings = {
   fogFar: number;
   shapeType: string;
   // Inner shape glow
-  innerGlowEnabled?: boolean;
-  innerGlowColor?: string;
-  innerGlowIntensity?: number;
-  innerGlowSize?: number;
+  innerGlowEnabled: boolean;
+  innerGlowColor: string;
+  innerGlowIntensity: number;
+  innerGlowSize: number;
   
 };
