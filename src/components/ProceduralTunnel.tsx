@@ -179,11 +179,11 @@ export default function ProceduralTunnel() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: '#000', display: 'flex', flexDirection: 'column', zIndex: 0 }}>
-      <Canvas
+        <Canvas
         shadows
         camera={{ position: [0, 0, 5], fov: 75 }}
         style={{ position: 'absolute', inset: 0, zIndex: 0 }}
-        gl={{ antialias: true, preserveDrawingBuffer: true, alpha: false }}
+        gl={{ antialias: true, preserveDrawingBuffer: false, alpha: false }}
         onCreated={(state) => setCanvasEl(state.gl.domElement)}
       >
         <color attach="background" args={[new THREE.Color(settings.bgColor).getHex()]} />

@@ -3,7 +3,11 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Settings } from './types';
 
-function makeGlowTexture(hexColor: string, size = 256) {
+const _glowCache = new Map<string, THREE.Texture>();
+function getGlowTexture(hexColor: string, size = 256) {
+  const key = `${hexColor}:${size}`;
+  const cached = _glowCache.get(key);
+  if (cached) return cached;
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
@@ -18,6 +22,7 @@ function makeGlowTexture(hexColor: string, size = 256) {
   ctx.fillRect(0, 0, size, size);
   const tex = new THREE.CanvasTexture(c);
   tex.needsUpdate = true;
+  _glowCache.set(key, tex);
   return tex;
 }
 
@@ -93,6 +98,12 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
     }
   });
 
+  const glowTex = useMemo(() => getGlowTexture(settings.innerGlowColor || settings.color1, Math.max(128, Math.round((settings.innerGlowSize || 3) * 64))), [
+    settings.innerGlowColor,
+    settings.innerGlowSize,
+    settings.color1,
+  ]);
+
   return (
     <group>
       {shapes.map((s, i) => (
@@ -125,7 +136,7 @@ export default function InnerShapes({ settings }: { settings: Settings }) {
         {/* additive sprite halo to fake a bloom/halo per-shape */}
         <sprite key={`glow-${i}`} ref={(el) => (spriteRefs.current[i] = el)} position={[s.x, s.y, s.z + 0.01]} scale={[settings.innerGlowSize, settings.innerGlowSize, 1]} renderOrder={100}>
           <spriteMaterial
-            map={makeGlowTexture(settings.innerGlowColor || settings.color1)}
+            map={glowTex}
             color={new THREE.Color(settings.innerGlowColor || settings.color1).getHex()}
             transparent
             depthWrite={false}
