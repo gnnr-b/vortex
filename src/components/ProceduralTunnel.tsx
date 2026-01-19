@@ -200,13 +200,13 @@ export default function ProceduralTunnel() {
       <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, display: 'flex', gap: 8 }}>
         {/* MediaRecorder (video) controls */}
         {!isMediaRecording ? (
-          <button onClick={startMediaRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#22aa44', color: '#fff', border: 'none' }}>
-            Start Recording Video
+          <button onClick={startMediaRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#ff66ff', color: '#111', border: 'none' }}>
+            Start Recording
           </button>
         ) : (
           <>
             <div style={{ alignSelf: 'center', color: '#fff', fontWeight: 600 }}>Recording Video...</div>
-            <button onClick={stopMediaRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#ffaa00', color: '#fff', border: 'none' }}>
+            <button onClick={stopMediaRecording} style={{ padding: '8px 12px', borderRadius: 6, background: '#ff66ff', color: '#111', border: 'none' }}>
               Stop & Save Video
             </button>
           </>
