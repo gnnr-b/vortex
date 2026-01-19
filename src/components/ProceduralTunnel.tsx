@@ -131,7 +131,7 @@ export default function ProceduralTunnel() {
         URL.revokeObjectURL(workerUrl);
       });
 
-      console.log('GIF recorder started', { workerUrl, width: gifOpts.width, height: gifOpts.height });
+      // GIF recorder started
 
       if (canvasEl) {
         try {
@@ -161,7 +161,9 @@ export default function ProceduralTunnel() {
         try {
           gif.addFrame(canvasEl, { copy: true, delay: Math.round(1000 / 30) });
           framesCapturedRef.current += 1;
-          if (framesCapturedRef.current % 10 === 0) console.log('Captured frames', framesCapturedRef.current);
+          if (framesCapturedRef.current % 10 === 0) {
+            // progress checkpoint
+          }
         } catch (e) {
         }
       }
