@@ -34,7 +34,8 @@ export default function ProceduralTunnel() {
     fogFar: 50,
     shapeType: 'cube',
   });
-
+  
+  const [showOverlay, setShowOverlay] = useState<boolean>(true);
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
   // MediaRecorder (video) refs/state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -53,7 +54,8 @@ export default function ProceduralTunnel() {
     outer.add(settings, 'ringRotationSpeed', 0, 0.2, 0.001).name('Ring Rot Speed').onChange((v: number) => setSettings(s => ({ ...s, ringRotationSpeed: v })));
     outer.add(settings, 'cameraSpeed', 0, 1, 0.01).name('Camera Speed').onChange((v: number) => setSettings(s => ({ ...s, cameraSpeed: v })));
     outer.add(settings, 'ringShininess', 0, 200, 1).name('Shininess').onChange((v: number) => setSettings(s => ({ ...s, ringShininess: v })));
-    outer.open();
+    // Ensure folders start closed on initial load
+    try { outer.close(); } catch { /* ignore if API differs */ }
 
     const inner = gui.addFolder('Inner Shapes');
     inner.add(settings, 'shapeType', ['cube', 'sphere', 'tetrahedron']).name('Shape').onChange((v: string) => setSettings(s => ({ ...s, shapeType: v })));
@@ -68,13 +70,13 @@ export default function ProceduralTunnel() {
     inner.addColor(settings, 'innerGlowColor').name('Glow Color').onChange((v: string) => setSettings(s => ({ ...s, innerGlowColor: v })));
     inner.add(settings, 'innerGlowIntensity', 6.0, 12, 0.1).name('Glow Intensity').onChange((v: number) => setSettings(s => ({ ...s, innerGlowIntensity: v })));
     inner.add(settings, 'innerGlowSize', 3.2, 8, 0.05).name('Glow Size').onChange((v: number) => setSettings(s => ({ ...s, innerGlowSize: v })));
-    inner.open();
+    try { inner.close(); } catch { /* ignore if API differs */ }
 
     const env = gui.addFolder('Environment');
     env.addColor(settings, 'bgColor').name('BG Color').onChange((v: string) => setSettings(s => ({ ...s, bgColor: v })));
     env.add(settings, 'fogNear', 0.1, 20, 0.1).name('Fog Near').onChange((v: number) => setSettings(s => ({ ...s, fogNear: v })));
     env.add(settings, 'fogFar', 10, 200, 1).name('Fog Far').onChange((v: number) => setSettings(s => ({ ...s, fogFar: v })));
-    env.open();
+    try { env.close(); } catch { /* ignore if API differs */ }
 
     
 
@@ -177,6 +179,23 @@ export default function ProceduralTunnel() {
         <InnerShapes settings={settings} />
         <PostProcessing settings={settings} />
       </Canvas>
+
+      {showOverlay && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, pointerEvents: 'none' }}>
+          <div style={{ pointerEvents: 'auto', maxWidth: 520, margin: '0 16px', background: 'rgba(6,6,10,0.88)', color: '#fff', padding: 18, borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.6)' }}>
+            <h2 style={{ margin: 0, marginBottom: 8 }}>Pynk — Procedural Tunnel</h2>
+            <p style={{ margin: 0, opacity: 0.92 }}>Interactive 3D tunnel with adjustable rings and inner shapes. Use the on-screen GUI to tweak colors, spacing and glow. Click "Start Recording Video" to capture a webm of the canvas.</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowOverlay(false)}
+                style={{ padding: '8px 12px', borderRadius: 6, background: '#ff66cc', color: '#111', border: 'none', fontWeight: 700 }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, display: 'flex', gap: 8 }}>
         {/* MediaRecorder (video) controls */}
